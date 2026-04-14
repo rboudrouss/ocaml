@@ -49,6 +49,14 @@ CAMLexport void caml_debugger_cleanup_fork(void)
 {
 }
 
+opcode_t caml_debugger_saved_instruction(code_t pc)
+{
+  /* No debugger available (HAS_SOCKETS not defined); this function should
+     never be called in non-debug bytecode, but must be defined for the
+     WASM/Emscripten build where HAS_SOCKETS is disabled. */
+  caml_fatal_error("debugger not available");
+}
+
 #else
 
 #ifdef HAS_UNISTD
