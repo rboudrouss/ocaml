@@ -174,9 +174,9 @@ void caml_build_primitive_table(char_os * lib_path,
   /* Open the shared libraries */
   caml_ext_table_init(&shared_libs, 8);
   if (libs != NULL) {
-    for (p = libs; *p != 0; p += strlen_os(p) + 1) {
-      printf("opening lib: %s, skipped\n", p);
-    }
+    // for (p = libs; *p != 0; p += strlen_os(p) + 1) {
+    //   printf("opening lib: %s, skipped\n", p);
+    // }
     // for (p = libs; *p != 0; p += strlen_os(p) + 1) {
     //   open_shared_lib(p);
     // }
