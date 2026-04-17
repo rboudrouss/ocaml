@@ -20,7 +20,6 @@
 /* The interface of this file is in "mlvalues.h" (for [caml_hash_variant])
    and in "hash.h" (for the other exported functions). */
 
-#include <stdio.h>
 #include "caml/mlvalues.h"
 #include "caml/custom.h"
 #include "caml/memory.h"
@@ -149,9 +148,6 @@ CAMLexport uint32_t caml_hash_mix_string(uint32_t h, value s)
   mlsize_t i;
   uint32_t w;
 
-  fprintf(stderr, "  [mix_str] len=%lu h=0x%x\n", (unsigned long)len, (unsigned)h);
-  fflush(stderr);
-
   /* Mix by 32-bit blocks (little-endian) */
   for (i = 0; i + 4 <= len; i += 4) {
 #ifdef ARCH_BIG_ENDIAN
@@ -162,14 +158,10 @@ CAMLexport uint32_t caml_hash_mix_string(uint32_t h, value s)
 #else
     w = *((uint32_t *) &Byte_u(s, i));
 #endif
-    fprintf(stderr, "  [mix_str] i=%lu w=0x%x\n", (unsigned long)i, (unsigned)w);
-    fflush(stderr);
     MIX(h, w);
   }
   /* Finish with up to 3 bytes */
   w = 0;
-  fprintf(stderr, "  [mix_str] tail i=%lu len&3=%lu\n", (unsigned long)i, (unsigned long)(len&3));
-  fflush(stderr);
   switch (len & 3) {
   case 3: w  = Byte_u(s, i+2) << 16;   /* fallthrough */
   case 2: w |= Byte_u(s, i+1) << 8;    /* fallthrough */
@@ -179,8 +171,6 @@ CAMLexport uint32_t caml_hash_mix_string(uint32_t h, value s)
   }
   /* Finally, mix in the length.  Ignore the upper 32 bits, generally 0. */
   h ^= (uint32_t) len;
-  fprintf(stderr, "  [mix_str] done h=0x%x\n", (unsigned)h);
-  fflush(stderr);
   return h;
 }
 
@@ -190,8 +180,6 @@ CAMLexport uint32_t caml_hash_mix_string(uint32_t h, value s)
 #define MAX_FORWARD_DEREFERENCE 1000
 
 /* The generic hash function */
-
-static int caml_hash_call_count = 0;
 
 CAMLprim value caml_hash(value count, value limit, value seed, value obj)
 {
@@ -204,84 +192,32 @@ CAMLprim value caml_hash(value count, value limit, value seed, value obj)
   value v;
   mlsize_t i, len;
 
-  caml_hash_call_count++;
-
   sz = Long_val(limit);
   if (sz < 0 || sz > HASH_QUEUE_SIZE) sz = HASH_QUEUE_SIZE;
   num = Long_val(count);
   h = Int_val(seed);
   queue[0] = obj; rd = 0; wr = 1;
 
-  if (!Is_long(obj) && Tag_val(obj) == String_tag) {
-    mlsize_t _ws = Wosize_val(obj);
-    mlsize_t _bytes = _ws * sizeof(value);
-    unsigned char _last = Byte_u(obj, _bytes - 1);
-    fprintf(stderr, "[hash#%d] STRING obj=0x%lx wosize=%lu nbytes=%lu pad_byte=%u slen=%ld\n",
-            caml_hash_call_count, (unsigned long)obj,
-            (unsigned long)_ws, (unsigned long)_bytes, (unsigned)_last,
-            (long)((long)_bytes - 1 - (long)_last));
-    fprintf(stderr, "  bytes: ");
-    for (mlsize_t _i = 0; _i < (_bytes < 16 ? _bytes : 16); _i++)
-      fprintf(stderr, "%02x ", Byte_u(obj, _i));
-    fprintf(stderr, "\n");
-  } else if (!Is_long(obj)) {
-    fprintf(stderr, "[hash#%d] obj=0x%lx tag=%d wosize=%lu\n",
-            caml_hash_call_count, (unsigned long)obj,
-            (int)Tag_val(obj), (unsigned long)Wosize_val(obj));
-  } else {
-    fprintf(stderr, "[hash#%d] obj=0x%lx (int=%ld)\n",
-            caml_hash_call_count, (unsigned long)obj, (long)Long_val(obj));
-  }
-  fflush(stderr);
-
   while (rd < wr && num > 0) {
     v = queue[rd++];
-    /* Debug: trace each BFS value */
-    if (!Is_long(v)) {
-      fprintf(stderr, "  [bfs rd=%d] v=0x%lx", (int)(rd-1), (unsigned long)v);
-      if (Is_in_value_area(v)) {
-        header_t _hd = Hd_val(v);
-        fprintf(stderr, " tag=%d wosize=%lu", (int)Tag_val(v), (unsigned long)Wosize_val(v));
-      } else {
-        fprintf(stderr, " (outside heap)");
-      }
-      fprintf(stderr, "\n");
-      fflush(stderr);
-    }
   again:
-    {
-      int _iva;
-      fprintf(stderr, "  [again] v=0x%lx Is_long=%d\n", (unsigned long)v, (int)Is_long(v));
-      fflush(stderr);
-      if (Is_long(v)) {
-        h = caml_hash_mix_intnat(h, v);
-        num--;
-      } else {
-        fprintf(stderr, "  [again] calling Is_in_value_area...\n"); fflush(stderr);
-        _iva = Is_in_value_area(v);
-        fprintf(stderr, "  [again] Is_in_value_area=%d\n", _iva); fflush(stderr);
-        if (!_iva) {
-          fprintf(stderr, "  [again] outside value area\n");
-          fflush(stderr);
-          /* v is a pointer outside the heap, probably a code pointer. */
-          h = caml_hash_mix_intnat(h, v);
-          num--;
-        } else {
-          uint32_t *_hd_ptr = (uint32_t *)v - 1;
-          uint32_t _hd_val;
-          fprintf(stderr, "  [again] hd_ptr=0x%lx v=0x%lx\n", (unsigned long)_hd_ptr, (unsigned long)v);
-          fflush(stderr);
-          _hd_val = *_hd_ptr;
-          fprintf(stderr, "  [again] hd_val=0x%x tag=%d wosize=%u\n",
-                  (unsigned)_hd_val, (int)(_hd_val & 0xFF), (unsigned)(_hd_val >> 10));
-          fflush(stderr);
-          switch ((int)(_hd_val & 0xFF)) {
+    if (Is_long(v)) {
+      h = caml_hash_mix_intnat(h, v);
+      num--;
+    }
+    else if (!Is_in_value_area(v)) {
+      /* v is a pointer outside the heap, probably a code pointer.
+         Shall we count it?  Let's say yes by compatibility with old code. */
+      h = caml_hash_mix_intnat(h, v);
+      num--;
+    }
+    else {
+      /* Read header as uint32_t: Tag_val uses header_t which may be 64-bit
+         even in WASM32, causing incorrect pointer arithmetic (-8 instead of -4). */
+      uint32_t _hd_val = *((uint32_t *)v - 1);
+      switch ((int)(_hd_val & 0xFF)) {
       case String_tag:
-        fprintf(stderr, "[hash] calling mix_string v=0x%lx\n", (unsigned long)v);
-        fflush(stderr);
         h = caml_hash_mix_string(h, v);
-        fprintf(stderr, "[hash] mix_string returned h=0x%x\n", (unsigned)h);
-        fflush(stderr);
         num--;
         break;
       case Double_tag:
@@ -358,17 +294,11 @@ CAMLprim value caml_hash(value count, value limit, value seed, value obj)
           queue[wr++] = Field(v, i);
         }
         break;
-          }  /* end switch */
-        }  /* end else (is in value area) */
-      }  /* end else (not Is_long) */
-    }  /* end block for 'again' */
-  }  /* end while */
-  fprintf(stderr, "[hash] BFS done, before FINAL_MIX h=0x%x\n", (unsigned)h);
-  fflush(stderr);
+      }
+    }
+  }
   /* Final mixing of bits */
   FINAL_MIX(h);
-  fprintf(stderr, "[hash] after FINAL_MIX h=0x%x\n", (unsigned)h);
-  fflush(stderr);
   /* Fold result to the range [0, 2^30-1] so that it is a nonnegative
      OCaml integer both on 32 and 64-bit platforms. */
   return Val_int(h & 0x3FFFFFFFU);
