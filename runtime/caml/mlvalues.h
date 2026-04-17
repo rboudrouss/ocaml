@@ -131,7 +131,10 @@ bits  63        (64-P) (63-P)        10 9     8 7   0
 #define Wosize_hd(hd) ((mlsize_t) ((hd) >> 10))
 #endif /* WITH_PROFINFO */
 
-#define Hd_val(val) (((header_t *) (val)) [-1])        /* Also an l-value. */
+/* WASM32: use uint32_t* explicitly so the compiler emits a 32-bit load.
+   header_t is uintnat=unsigned long (4 bytes), but some emscripten codegen
+   paths generate incorrect byte-level accesses through the header_t* cast. */
+#define Hd_val(val) (*((uint32_t *)(val) - 1))          /* Also an l-value. */
 #define Hd_op(op) (Hd_val (op))                        /* Also an l-value. */
 #define Hd_bp(bp) (Hd_val (bp))                        /* Also an l-value. */
 #define Hd_hp(hp) (* ((header_t *) (hp)))              /* Also an l-value. */
@@ -174,14 +177,18 @@ bits  63        (64-P) (63-P)        10 9     8 7   0
 
 #define Profinfo_val(val) (Profinfo_hd (Hd_val (val)))
 
+/* Tag_val: read the tag byte from the block header via Hd_val (uint32_t load).
+   The original byte-pointer form [-sizeof(value)] may be miscompiled by
+   emscripten when sizeof(value) is evaluated differently at compile time.
+   Tag_val is NOT an l-value here; use Tag_set to write the tag. */
+#define Tag_val(val)     ((tag_t)(Hd_val(val) & 0xFF))
+/* Tag_set: write only the tag byte, preserving wosize and color bits. */
+#define Tag_set(val, t)  (Hd_val(val) = (Hd_val(val) & ~(uint32_t)0xFF) | (uint32_t)(tag_t)(t))
+
 #ifdef ARCH_BIG_ENDIAN
-#define Tag_val(val) (((unsigned char *) (val)) [-1])
-                                                 /* Also an l-value. */
 #define Tag_hp(hp) (((unsigned char *) (hp)) [sizeof(value)-1])
                                                  /* Also an l-value. */
 #else
-#define Tag_val(val) (((unsigned char *) (val)) [-sizeof(value)])
-                                                 /* Also an l-value. */
 #define Tag_hp(hp) (((unsigned char *) (hp)) [0])
                                                  /* Also an l-value. */
 #endif

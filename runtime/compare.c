@@ -23,12 +23,6 @@
 #include "caml/misc.h"
 #include "caml/mlvalues.h"
 
-/* In WASM32, header_t may be 64-bit, making Hd_val/Tag_val/Wosize_val read
-   8 bytes before the pointer instead of the correct 4. Use uint32_t directly. */
-#define HDR32(v)   (*((uint32_t *)(v) - 1))
-#define TAG32(v)   ((tag_t)(HDR32(v) & 0xFF))
-#define WOSZ32(v)  ((mlsize_t)(HDR32(v) >> 10))
-
 /* Structural comparison on trees. */
 
 struct compare_item { value * v1, * v2; mlsize_t count; };
@@ -135,7 +129,7 @@ static intnat do_compare_val(struct compare_stack* stk,
       /* Subtraction above cannot overflow and cannot result in UNORDERED */
       if (!Is_in_value_area(v2))
         return LESS;
-      switch (TAG32(v2)) {
+      switch (Tag_val(v2)) {
         case Forward_tag:
           v2 = Forward_val(v2);
           continue;
@@ -156,7 +150,7 @@ static intnat do_compare_val(struct compare_stack* stk,
     if (Is_long(v2)) {
       if (!Is_in_value_area(v1))
         return GREATER;
-      switch (TAG32(v1)) {
+      switch (Tag_val(v1)) {
         case Forward_tag:
           v1 = Forward_val(v1);
           continue;
@@ -182,8 +176,8 @@ static intnat do_compare_val(struct compare_stack* stk,
       return (v1 >> 1) - (v2 >> 1);
       /* Subtraction above cannot result in UNORDERED */
     }
-    t1 = TAG32(v1);
-    t2 = TAG32(v2);
+    t1 = Tag_val(v1);
+    t2 = Tag_val(v2);
     if (t1 != t2) {
         /* Besides long/block comparisons, the only forms of
            heterogeneous comparisons we support are:
@@ -234,8 +228,8 @@ static intnat do_compare_val(struct compare_stack* stk,
       break;
     }
     case Double_array_tag: {
-      mlsize_t sz1 = WOSZ32(v1) / Double_wosize;
-      mlsize_t sz2 = WOSZ32(v2) / Double_wosize;
+      mlsize_t sz1 = Wosize_val(v1) / Double_wosize;
+      mlsize_t sz2 = Wosize_val(v2) / Double_wosize;
       mlsize_t i;
       if (sz1 != sz2) return sz1 - sz2;
       for (i = 0; i < sz1; i++) {
@@ -285,8 +279,8 @@ static intnat do_compare_val(struct compare_stack* stk,
       break;
     }
     default: {
-      mlsize_t sz1 = WOSZ32(v1);
-      mlsize_t sz2 = WOSZ32(v2);
+      mlsize_t sz1 = Wosize_val(v1);
+      mlsize_t sz2 = Wosize_val(v2);
       /* Compare sizes first for speed */
       if (sz1 != sz2) return sz1 - sz2;
       if (sz1 == 0) break;

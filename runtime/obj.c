@@ -45,7 +45,7 @@ CAMLprim value caml_obj_tag(value arg)
 
 CAMLprim value caml_obj_set_tag (value arg, value new_tag)
 {
-  Tag_val (arg) = Int_val (new_tag);
+  Tag_set(arg, Int_val(new_tag));
   return Val_unit;
 }
 
@@ -64,7 +64,7 @@ CAMLprim value caml_obj_set_raw_field(value arg, value pos, value bits)
 CAMLprim value caml_obj_make_forward (value blk, value fwd)
 {
   caml_modify(&Field(blk, 0), fwd);
-  Tag_val (blk) = Forward_tag;
+  Tag_set(blk, Forward_tag);
   return Val_unit;
 }
 

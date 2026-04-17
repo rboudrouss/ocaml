@@ -212,10 +212,7 @@ CAMLprim value caml_hash(value count, value limit, value seed, value obj)
       num--;
     }
     else {
-      /* Read header as uint32_t: Tag_val uses header_t which may be 64-bit
-         even in WASM32, causing incorrect pointer arithmetic (-8 instead of -4). */
-      uint32_t _hd_val = *((uint32_t *)v - 1);
-      switch ((int)(_hd_val & 0xFF)) {
+      switch (Tag_val(v)) {
       case String_tag:
         h = caml_hash_mix_string(h, v);
         num--;
