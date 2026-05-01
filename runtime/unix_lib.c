@@ -200,25 +200,6 @@ CAMLprim value unix_inet_addr_of_string(value s)
 #endif
 }
 
-#else
-
-CAMLprim value unix_inet_addr_of_string(value s)
-{
-  /* Minimal no-socket implementation: parse dotted-decimal IPv4 only.
-     Allows Unix module-level initializers (inet_addr_any, inet_addr_loopback)
-     to succeed in WASM/Emscripten builds where HAS_SOCKETS is disabled. */
-  CAMLparam1(s);
-  unsigned int a, b, c, d;
-  if (sscanf(String_val(s), "%u.%u.%u.%u", &a, &b, &c, &d) == 4
-      && a < 256 && b < 256 && c < 256 && d < 256) {
-    char buf[4];
-    buf[0] = (char)a; buf[1] = (char)b;
-    buf[2] = (char)c; buf[3] = (char)d;
-    CAMLreturn(caml_alloc_initialized_string(4, buf));
-  }
-  caml_failwith("inet_addr_of_string");
-}
-
 #endif
 
 CAMLprim value unix_alarm(value t)
